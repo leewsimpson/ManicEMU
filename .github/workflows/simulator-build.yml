@@ -1,4 +1,6 @@
-# Unsigned iOS Simulator build of the ManicEmuSimulator scheme.
+# Unsigned iOS Simulator build of the ManicEmuSimulator scheme, then a launch
+# smoke test in the simulator (screenshots, app log and any crash report are
+# uploaded as the "simulator" artifact).
 #
 # Runs on every push to a branch that contains this file. For a branch that
 # doesn't (one cut from upstream/main for a PR), run it from this branch and
@@ -104,6 +106,22 @@ jobs:
             ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
+
+      - name: Launch in simulator
+        timeout-minutes: 15
+        run: |
+          bash .github/scripts/sim-smoke-test.sh \
+            "$DERIVED_DATA/Build/Products/Debug-iphonesimulator/ManicEmuSimulator.app" \
+            "$RUNNER_TEMP/simulator"
+
+      - name: Upload simulator results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator
+          path: ${{ runner.temp }}/simulator
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload result bundle
         if: failure()
