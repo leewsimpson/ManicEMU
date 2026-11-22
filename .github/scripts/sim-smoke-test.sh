@@ -34,10 +34,14 @@ if [[ -z "$UDID" ]]; then
     exit 1
 fi
 
-xcrun simctl boot "$UDID"
+# bootstatus -b boots the device if it isn't already, and waits for it.
 xcrun simctl bootstatus "$UDID" -b
-# The Simulator window is only needed for the rotation shortcut.
-open -a Simulator --args -CurrentDeviceUDID "$UDID"
+# The Simulator window is only needed for the rotation shortcut. It isn't
+# registered with Launch Services on the runner, so open it by path.
+SIMULATOR_APP="$(xcode-select -p)/Applications/Simulator.app"
+if ! open "$SIMULATOR_APP" --args -CurrentDeviceUDID "$UDID"; then
+    echo "warning: couldn't open $SIMULATOR_APP" >&2
+fi
 
 xcrun simctl install "$UDID" "$APP"
 
@@ -46,7 +50,17 @@ xcrun simctl spawn "$UDID" log stream --level debug --style compact \
 LOG_PID=$!
 trap 'kill "$LOG_PID" 2>/dev/null || true' EXIT
 
-LAUNCH="$(xcrun simctl launch "$UDID" "$BUNDLE_ID")"
+collect_crashes() {
+    find "$HOME/Library/Logs/DiagnosticReports" -name "${EXECUTABLE}*" \
+        -exec cp {} "$OUT/" \; 2>/dev/null || true
+}
+
+if ! LAUNCH="$(xcrun simctl launch "$UDID" "$BUNDLE_ID")"; then
+    echo "error: app failed to launch" >&2
+    xcrun simctl io "$UDID" screenshot "$OUT/00-launch-failed.png" >/dev/null || true
+    collect_crashes
+    exit 1
+fi
 echo "$LAUNCH"
 APP_PID="${LAUNCH##*: }"
 
@@ -77,8 +91,6 @@ if ((STATUS == 0)); then
     fi
 fi
 
-# Keep any crash reports for the app.
-find "$HOME/Library/Logs/DiagnosticReports" -name "${EXECUTABLE}*" \
-    -exec cp {} "$OUT/" \; 2>/dev/null || true
+collect_crashes
 
 exit "$STATUS"
