@@ -1219,3 +1219,4 @@
 "AesKeysTxtDesc" = "运行加密 3DS ROM 时需要此文件。";
 "CoverNormaliseNamesOn" = "Normalise Names: On";
 "CoverNormaliseNamesOff" = "Normalise Names: Off";
+"CoverNormaliseNames" = "Normalise Names";
