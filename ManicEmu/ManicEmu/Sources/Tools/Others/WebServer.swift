@@ -242,14 +242,15 @@ extension WebServer {
         for file in files {
             let name = (file.fileName as NSString).lastPathComponent
             let ext = (name as NSString).pathExtension.lowercased()
-            if let chosenType, !canImport(fileExtension: ext, as: chosenType) {
-                let reason = FileType.zip.extensions.contains(ext)
-                    ? "\(platform) games can't be imported from a .\(ext); upload the ROM itself, or leave out platform"
-                    : "\(platform) doesn't use .\(ext) files"
-                rejected.append(["fileName": name, "error": reason])
-                continue
-            }
-            if chosenType == nil && !allowed.contains(ext) {
+            if let chosenType {
+                if !canImport(fileExtension: ext, as: chosenType) {
+                    let reason = FileType.zip.extensions.contains(ext)
+                        ? "\(platform) games can't be imported from a .\(ext); upload the ROM itself, or leave out platform"
+                        : "\(platform) doesn't use .\(ext) files"
+                    rejected.append(["fileName": name, "error": reason])
+                    continue
+                }
+            } else if !allowed.contains(ext) {
                 rejected.append(["fileName": name, "error": "Unsupported file type"])
                 continue
             }
