@@ -23,9 +23,9 @@ under WiFi (for example `192.168.1.20:6969`) and pass `--host http://192.168.1.2
 | `info GAME` | Details: size, import date, last played, play time, save, save states, cheats |
 | `update GAME [--name N] [--sound on\|off] [--haptic H] [--orientation O]` | Rename a game or change its settings |
 | `find-game QUERY` | Search the library by name |
-| `put FILE...` | Upload files. The app imports them into the library straight away |
+| `put FILE... [--platform P] [--bulk] [--names MAME]` | Upload files. The app imports them into the library straight away |
 | `remove GAME... [--yes]` | Remove games by name, file name or id. Without `--yes` it only shows what would go |
-| `sync DIR [--platform P] [--ext .zip] [--delete] [--yes]` | Upload files in DIR the library doesn't have. Dry run without `--yes` |
+| `sync DIR [--platform P] [--ext .zip] [--bulk] [--names MAME] [--delete] [--yes]` | Upload files in DIR the library doesn't have. Dry run without `--yes` |
 | `pending` / `cancel NAME...` | Uploads not yet imported, and cancelling them |
 | `find` | Print the phone's address |
 
@@ -46,6 +46,37 @@ Platform ids are the app's own, such as `nes`, `snes`, `gb`, `gbc`, `gba`, `ds`,
 - `--name` changes the name shown in the app. The ROM file keeps its name.
 - `--haptic` is the vibration when on-screen buttons are pressed. `--orientation` locks the game screen.
 - A game that's being played can't be updated. Ask the user to close it and retry.
+
+## Choosing the platform
+
+Pass `--platform` to `put` and `sync` whenever you know the platform. The files then import as that
+platform instead of one the app guesses from the extension, and the app doesn't stop to ask on the phone:
+
+- Extensions several platforms share (`.bin`, `.iso`, `.chd`, `.cue`, `.zip` and others) import as the
+  platform you gave.
+- Archives that platform runs zipped (arcade, DOS, C64, Amiga) stay zipped, without the ZIP File
+  Handling dialog. Always use `--platform arcade` for MAME zips: builds made from the public source
+  can't look MAME titles up, so without it every zip stops on that dialog.
+- A file the platform doesn't use is rejected with the reason. That includes zipped ROMs for platforms
+  that don't run zips (a `.zip` for `gba`, say): upload the ROM itself, or leave out `--platform`.
+
+## Arcade game names and cover art
+
+Builds made from the public source can't look up MAME titles, so arcade games show their zip name
+(`mslug3`) and cover art search, which looks for the title, mostly finds nothing. Pass
+`--names` with a MAME executable (the script runs its `-listfull`) or a text file of that output.
+New games then get the full title (`Metal Slug 3 (NGM-2560)`) as their name, which matches the
+libretro MAME box art. The sync dry run shows the title each file will get. Names only apply to
+games new to the library; use `update --name` for ones already there.
+
+## Uploading many files
+
+Pass `--bulk` when uploading more than a handful of files. Without it every file gets its own
+"import successful" alert on the phone, and errors, the platform picker and the ZIP File Handling
+dialog each wait for a tap. With `--bulk` the phone shows nothing: games import quietly, cover art is
+still looked up in the background, and zips the app would have asked about are imported as they are.
+Failures aren't reported anywhere, so check `library` afterwards. Games whose platform the app can't
+tell import as unknown, so pass `--platform` too when you know it.
 
 ## Syncing a folder
 
@@ -68,4 +99,9 @@ For anything the script doesn't cover:
 - `POST /library/update` form `id=ID` plus any of `name=`, `sound=true|false`,
   `haptic=off|soft|light|medium|heavy|rigid`, `orientation=auto|portrait|landscape`, with the same
   header: returns the updated game. Listings include `sound`, `haptic` and `orientation` too.
+- `POST /library/upload` multipart `files[]` plus optional `platform=ID`, `bulk=1` and `name=` (one
+  file only, sets the display name of a new game), with the same header: saves and imports the files
+  as that platform, without alerts when `bulk=1`. Returns
+  `{accepted: [fileName], rejected: [{fileName, error}]}` before the import finishes. An unknown id
+  returns 400 with the list of known ids.
 - From Git Bash, set `MSYS_NO_PATHCONV=1` so `/` paths aren't rewritten.

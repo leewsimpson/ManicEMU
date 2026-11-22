@@ -91,6 +91,49 @@ extension FilesImporter {
         stateLock.unlock()
     }
     
+    //Platforms the sender chose for files (Wi-Fi library upload). Such files import as that platform
+    //instead of one guessed from the extension, and archives the platform runs zipped skip the ZIP dialog.
+    private static var importPlatforms = [String: GameType]()
+    //Names the sender chose for files (Wi-Fi library upload), shown instead of the file name and used for cover search.
+    private static var importNames = [String: String]()
+
+    static func setImportName(_ name: String, path: String) {
+        stateLock.lock()
+        importNames[URL(fileURLWithPath: path).standardizedFileURL.path] = name
+        stateLock.unlock()
+    }
+
+    private static func importName(for url: URL) -> String? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return importNames[url.standardizedFileURL.path]
+    }
+
+    static func setImportPlatform(_ gameType: GameType, path: String) {
+        stateLock.lock()
+        importPlatforms[URL(fileURLWithPath: path).standardizedFileURL.path] = gameType
+        stateLock.unlock()
+    }
+
+    private static func importPlatform(for url: URL) -> GameType? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return importPlatforms[url.standardizedFileURL.path]
+    }
+
+    private static func endImportPlatform(_ url: URL) {
+        stateLock.lock()
+        importPlatforms.removeValue(forKey: url.standardizedFileURL.path)
+        importNames.removeValue(forKey: url.standardizedFileURL.path)
+        stateLock.unlock()
+    }
+
+    /// True if the sender chose a platform that runs this archive as it is (arcade, DOS, C64 or Amiga zips).
+    private static func keepsArchiveZipped(_ url: URL) -> Bool {
+        guard let gameType = importPlatform(for: url) else { return false }
+        return GameType.gameTypes(multiPlatformFileExtension: url.pathExtension).contains(gameType)
+    }
+
     private static func setPSPImportGameInfo(_ game: LibretroPSPGame, for path: String) {
         stateLock.lock()
         importGameInfos[path] = game
@@ -106,6 +149,7 @@ extension FilesImporter {
     static func importFiles(urls: [URL],
                             preErrors: [ImportError] = [],
                             silentMode: Bool = PlayViewController.isGaming,
+                            askAboutZips: Bool = true,
                             in scene: UIWindowScene?,
                             importCompletion: (()->Void)? = nil) {
         if urls.isEmpty {
@@ -124,7 +168,7 @@ extension FilesImporter {
         }
         
         //Process the zip file.
-        handleZip(urls: urls, silentMode: silentMode) { unzipUrls in
+        handleZip(urls: urls, silentMode: silentMode, askAboutZips: askAboutZips) { unzipUrls in
             var urls = urls.filter({ !FileType.zip.extensions.contains($0.pathExtension.lowercased()) }) + unzipUrls
             //First, handle the cue and m3u.
             let (multiFileResultUrls, multiFileResultError, multiFileResultItems) = handleMultiFiles(urls: urls)
@@ -466,7 +510,12 @@ extension FilesImporter {
     }
     
     private static func importGame(url: URL, items: [URL] = [], completion: ((_ gameId: String?, _ gameName: String?, _ error: ImportError?)->Void)?) {
+        let callerCompletion = completion
         DispatchQueue.global(qos: .userInitiated).async {
+            let completion: ((_ gameId: String?, _ gameName: String?, _ error: ImportError?)->Void)? = { gameId, gameName, error in
+                endImportPlatform(url)
+                callerCompletion?(gameId, gameName, error)
+            }
             if isSymbianImportURL(url) {
                 importSymbianGame(url: url, completion: completion)
                 return
@@ -653,10 +702,15 @@ extension FilesImporter {
                     }
                     
                     var gameType = isPSPPBP ? .psp : GameType(fileExtension: game.fileExtension)
-                    
-                    if (game.fileExtension.lowercased() == "zip" || game.fileExtension.lowercased() == "7z") &&
-                        MAMEKit.isSupportTitle(fileName: game.name) {
+                    let isArchive = game.fileExtension.lowercased() == "zip" || game.fileExtension.lowercased() == "7z"
+
+                    if let chosenType = importPlatform(for: originalUrl) {
+                        gameType = chosenType
+                    } else if isArchive && MAMEKit.isSupportTitle(fileName: game.name) {
                         gameType = .arcade
+                    }
+
+                    if isArchive && gameType == .arcade {
                         if R.Strings.NaomiTitles.contains(game.name) {
                             game.extras = [ExtraKey.arcadeType.rawValue: 1].jsonData()
                         } else if R.Strings.AtomiswaveTitles.contains(game.name) {
@@ -668,7 +722,11 @@ extension FilesImporter {
                             game.aliasName = mameInfo.name
                         }
                     }
-                    
+
+                    if let chosenName = importName(for: originalUrl) {
+                        game.aliasName = chosenName
+                    }
+
                     if gameType != .notSupport {
                         game.gameType = gameType
                         ///Handling game info for specific game types.
@@ -958,7 +1016,9 @@ extension FilesImporter {
         }
     }
     
-    static func handleZip(urls: [URL], silentMode: Bool, completion: @escaping ([URL])->Void) {
+    /// With `askAboutZips` false, zips that would need the ZIP File Handling dialog are imported as they are,
+    /// the same as confirming the dialog with nothing ticked.
+    static func handleZip(urls: [URL], silentMode: Bool, askAboutZips: Bool = true, completion: @escaping ([URL])->Void) {
         DispatchQueue.global().async {
             var results = [URL]()
             var needToHandleUrls = [URL]()
@@ -966,7 +1026,8 @@ extension FilesImporter {
             
             for url in urls {
                 let fileExtension = url.pathExtension.lowercased()
-                if (fileExtension == "zip" || fileExtension == "7z") && MAMEKit.isSupportTitle(fileName: url.lastPathComponent.deletingPathExtension) {
+                if (fileExtension == "zip" || fileExtension == "7z") &&
+                    (keepsArchiveZipped(url) || MAMEKit.isSupportTitle(fileName: url.lastPathComponent.deletingPathExtension)) {
                     results.append(url)
                     continue
                 }
@@ -1036,7 +1097,12 @@ extension FilesImporter {
                     }
                 }
             }
-            
+
+            if !askAboutZips {
+                results.append(contentsOf: needToHandleUrls)
+                needToHandleUrls.removeAll()
+            }
+
             if needToHandleUrls.count > 0 {
                 DispatchQueue.main.async {
                     UIView.hideLoading()
@@ -1593,6 +1659,9 @@ extension FilesImporter {
             return true
         }
         guard ["zip", "7z", "rar"].contains(ext) else { return false }
+        if let chosenType = importPlatform(for: url), chosenType != .symbian {
+            return false
+        }
         if MAMEKit.isSupportTitle(fileName: url.lastPathComponent.deletingPathExtension) {
             return false
         }
