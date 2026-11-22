@@ -128,6 +128,7 @@
 "GamesListEmptyWelcomeRight" = "の世界へようこそ";
 "GamesListEmptyWarnning" = "ゲームROMは合法的な手段で取得してください";
 "LandscapeEmptyAddGame" = "ゲームを追加";
+"LandscapeSearchNoResults" = "結果なし";
 "DeleteGameAlertDetail" = "ゲームROM/セーブデータ/チートコードなどが完全削除されます（復元不可）";
 "DeleteSkinAlertDetail" = "スキンを削除すると復元できません！";
 "DeleteGameGameStateAlertDetail" = "セーブステートを削除すると復元できません！";
@@ -1180,3 +1181,5 @@ PlayCaseは、アクセサリーやスキンとの互換性を考慮して作ら
 
 "Game3DSEncryptedTips" = "暗号化された ROM を読み込むには、正しい aes_keys.txt をインポートしてください。";
 "AesKeysTxtDesc" = "暗号化された 3DS ROM を遊ぶために必要なファイルです。";
+"CoverNormaliseNamesOn" = "Normalise Names: On";
+"CoverNormaliseNamesOff" = "Normalise Names: Off";

@@ -130,6 +130,7 @@
 "GamesListEmptyWelcomeRight" = "";
 "GamesListEmptyWarnning" = "Asegúrese de obtener ROMs legalmente";
 "LandscapeEmptyAddGame" = "Añadir juego";
+"LandscapeSearchNoResults" = "Sin resultados";
 "DeleteGameAlertDetail" = "¡Se eliminarán ROM, saves y cheat codes!";
 "DeleteSkinAlertDetail" = "¡La skin se eliminará permanentemente!";
 "DeleteGameGameStateAlertDetail" = "¡Save state se eliminará permanentemente!";
@@ -1159,3 +1160,5 @@ Si quieres mejorar tu configuración, PlayCase es el complemento perfecto para e
 
 "Game3DSEncryptedTips" = "Importa el aes_keys.txt correcto para leer las ROM encriptadas.";
 "AesKeysTxtDesc" = "Necesario para jugar a ROM 3DS encriptadas.";
+"CoverNormaliseNamesOn" = "Normalise Names: On";
+"CoverNormaliseNamesOff" = "Normalise Names: Off";

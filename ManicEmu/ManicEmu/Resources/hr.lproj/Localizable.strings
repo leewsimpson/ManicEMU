@@ -129,6 +129,7 @@
 "GamesListEmptyWelcomeRight" = "-a";
 "GamesListEmptyWarnning" = "Provjerite da ROM datoteke dobivate na legalan način";
 "LandscapeEmptyAddGame" = "Dodaj igru";
+"LandscapeSearchNoResults" = "Nema rezultata";
 "DeleteGameAlertDetail" = "ROM igre, save datoteke i cheat code-ovi će biti trajno izbrisani, ova radnja je nepovratna!";
 "DeleteSkinAlertDetail" = "Skin će biti trajno uklonjen!";
 "DeleteGameGameStateAlertDetail" = "Instant save će biti trajno uklonjen!";
@@ -1184,3 +1185,5 @@ Ako želite unaprijediti svoju postavu, PlayCase je savršen dodatak ovom skinu.
 
 "Game3DSEncryptedTips" = "Uvezite ispravnu datoteku aes_keys.txt da biste čitali šifrirane ROM-ove.";
 "AesKeysTxtDesc" = "Potrebno za igranje šifriranih 3DS ROM-ova.";
+"CoverNormaliseNamesOn" = "Normalise Names: On";
+"CoverNormaliseNamesOff" = "Normalise Names: Off";

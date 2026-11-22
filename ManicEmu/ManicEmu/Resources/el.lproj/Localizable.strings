@@ -130,6 +130,7 @@
 "GamesListEmptyWelcomeRight" = "";
 "GamesListEmptyWarnning" = "Βεβαιωθείτε ότι αποκτάτε αρχεία ROM παιχνιδιών μέσω νόμιμων καναλιών";
 "LandscapeEmptyAddGame" = "Προσθήκη παιχνιδιού";
+"LandscapeSearchNoResults" = "Κανένα αποτέλεσμα";
 "DeleteGameAlertDetail" = "Το ROM του παιχνιδιού, τα αποθηκευμένα παιχνίδια και τα cheat codes θα διαγραφούν οριστικά!";
 "DeleteSkinAlertDetail" = "Το skin θα αφαιρεθεί οριστικά!";
 "DeleteGameGameStateAlertDetail" = "Η αποθηκευμένη κατάσταση θα αφαιρεθεί οριστικά!";
@@ -1187,3 +1188,5 @@
 
 "Game3DSEncryptedTips" = "Εισαγάγετε το σωστό aes_keys.txt για να διαβαστούν οι κρυπτογραφημένες ROM.";
 "AesKeysTxtDesc" = "Απαιτείται για να παίξετε κρυπτογραφημένες ROM 3DS.";
+"CoverNormaliseNamesOn" = "Normalise Names: On";
+"CoverNormaliseNamesOff" = "Normalise Names: Off";

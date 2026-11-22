@@ -130,6 +130,7 @@
 "GamesListEmptyWelcomeRight" = "的世界";
 "GamesListEmptyWarnning" = "請確保透過合法管道取得遊戲ROM檔案";
 "LandscapeEmptyAddGame" = "新增遊戲";
+"LandscapeSearchNoResults" = "沒有結果";
 "DeleteGameAlertDetail" = "遊戲ROM、存檔和金手指等資料將一併刪除，此操作不可逆！";
 "DeleteSkinAlertDetail" = "皮膚移除後將無法恢復！";
 "DeleteGameGameStateAlertDetail" = "即時存檔移除後將無法恢復！";
@@ -1190,3 +1191,5 @@ PlayCase 專注於高品質 iPhone 保護殼，設計時充分考慮了配件與
 
 "Game3DSEncryptedTips" = "請匯入正確的 aes_keys.txt 以讀取加密 ROM。";
 "AesKeysTxtDesc" = "執行加密 3DS ROM 時需要此檔案。";
+"CoverNormaliseNamesOn" = "Normalise Names: On";
+"CoverNormaliseNamesOff" = "Normalise Names: Off";

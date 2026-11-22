@@ -129,6 +129,7 @@
 "GamesListEmptyWelcomeRight" = "";
 "GamesListEmptyWarnning" = "אנא ודא שאתה משיג קבצי ROM ממקורות חוקיים";
 "LandscapeEmptyAddGame" = "הוסף משחק";
+"LandscapeSearchNoResults" = "אין תוצאות";
 "DeleteGameAlertDetail" = "קובץ ה-ROM, השמירות וקודי ה-cheat יימחקו לצמיתות! פעולה זו אינה הפיכה!";
 "DeleteSkinAlertDetail" = "ה-skin יוסר לצמיתות ולא ניתן יהיה לשחזרו!";
 "DeleteGameGameStateAlertDetail" = "השמירה המיידית תוסר לצמיתות ולא ניתן יהיה לשחזרה!";
@@ -1187,3 +1188,5 @@ PlayCase מתמקדת במעטפות iPhone איכותיות, המיוצרות �
 
 "Game3DSEncryptedTips" = "ייבאו את הקובץ aes_keys.txt הנכון כדי לקרוא ROM מוצפנים.";
 "AesKeysTxtDesc" = "נדרש כדי להריץ ROM מוצפנים של 3DS.";
+"CoverNormaliseNamesOn" = "Normalise Names: On";
+"CoverNormaliseNamesOff" = "Normalise Names: Off";

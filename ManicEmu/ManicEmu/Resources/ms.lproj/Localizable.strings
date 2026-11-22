@@ -129,6 +129,7 @@
 "GamesListEmptyWelcomeRight" = "";
 "GamesListEmptyWarnning" = "Pastikan anda mendapatkan ROM secara sah";
 "LandscapeEmptyAddGame" = "Tambah Permainan";
+"LandscapeSearchNoResults" = "Tiada hasil";
 "DeleteGameAlertDetail" = "ROM, simpanan dan data cheat code akan dipadam selama-lamanya!";
 "DeleteSkinAlertDetail" = "Kulit yang dipadam tidak boleh dipulihkan!";
 "DeleteGameGameStateAlertDetail" = "Simpanan segera akan dipadam selama-lamanya!";
@@ -1158,3 +1159,5 @@ Jika anda ingin meningkatkan persediaan anda, PlayCase adalah padanan sempurna u
 
 "Game3DSEncryptedTips" = "Import aes_keys.txt yang betul untuk membaca ROM yang disulitkan.";
 "AesKeysTxtDesc" = "Diperlukan untuk bermain ROM 3DS yang disulitkan.";
+"CoverNormaliseNamesOn" = "Normalise Names: On";
+"CoverNormaliseNamesOff" = "Normalise Names: Off";

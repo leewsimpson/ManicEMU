@@ -129,6 +129,7 @@
 "GamesListEmptyWelcomeRight" = "dünyasına hoş geldin";
 "GamesListEmptyWarnning" = "Lütfen oyun ROM dosyalarını yasal kaynaklardan edindiğinizden emin olun";
 "LandscapeEmptyAddGame" = "Oyun Ekle";
+"LandscapeSearchNoResults" = "Sonuç yok";
 "DeleteGameAlertDetail" = "Oyun ROM'u, kayıtlar ve cheat kodları gibi tüm veriler kalıcı olarak silinecek!";
 "DeleteSkinAlertDetail" = "Skin kaldırıldıktan sonra geri alınamaz!";
 "DeleteGameGameStateAlertDetail" = "Anlık kayıtlar kalıcı olarak silinecek!";
@@ -1184,3 +1185,5 @@ Kurulumunuzu bir üst seviyeye taşımak istiyorsanız, PlayCase bu kaplama içi
 
 "Game3DSEncryptedTips" = "Şifreli ROM'ları okumak için doğru aes_keys.txt dosyasını içe aktarın.";
 "AesKeysTxtDesc" = "Şifreli 3DS ROM'larını oynamak için gerekli.";
+"CoverNormaliseNamesOn" = "Normalise Names: On";
+"CoverNormaliseNamesOff" = "Normalise Names: Off";

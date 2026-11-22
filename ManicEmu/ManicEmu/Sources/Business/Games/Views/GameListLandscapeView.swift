@@ -50,7 +50,7 @@ class GameListLandscapeView: BaseView {
     private lazy var searchButton: ASButtonView = {
         let view = ASButtonView(.iconOnlyWithSmallSize(icon: .symbolImage(R.image.searchRegular_iconSymbols())).enableGlass(true))
         view.didTapButton = { [weak self] in
-            //search
+            self?.showSearchInput()
         }
         return view
     }()
@@ -340,7 +340,7 @@ class GameListLandscapeView: BaseView {
         }
         
         
-        functionStack.addArrangedSubviews([historyButton, themeButton, importButton, settingsButton])
+        functionStack.addArrangedSubviews([searchButton, historyButton, themeButton, importButton, settingsButton])
         functionStack.axis = .horizontal
         functionStack.spacing = R.Size.ContentSpaceSmall
         navigationView.addSubview(functionStack)
@@ -636,6 +636,7 @@ class GameListLandscapeView: BaseView {
         // indexes still exist.
         listView.collectionViewLayout.invalidateLayout()
         listView.reloadData()
+        updateSearchState()
     }
     
     //MARK: - navigation交互
@@ -735,6 +736,43 @@ class GameListLandscapeView: BaseView {
         }
     }
     
+    /// Prompt for a search keyword. Confirming an empty field clears the search.
+    private func showSearchInput() {
+        LimitedTextInputView.show(icon: .symbolImage(R.image.searchRegular_iconSymbols()),
+                                  title: R.string.localizable.gamesSearchPlaceHolder(),
+                                  text: searchString,
+                                  placeholder: R.string.localizable.gamesSearchPlaceHolder(),
+                                  limitedType: .normal(maxTextSize: 255, emptyEnable: true)) { [weak self] result in
+            guard let self else { return }
+            let text = (result as? String)?.trimmed ?? ""
+            if text.isEmpty {
+                self.stopSearch()
+            } else {
+                self.startSearch(text: text)
+            }
+        }
+    }
+
+    private var isSearching: Bool { searchString != nil }
+
+    /// Tint the search button while a keyword is applied, and show "No Results" in list mode when nothing matches.
+    private func updateSearchState() {
+        let color = isSearching ? R.Color.Main : R.Color.LabelPrimary
+        searchButton.setIcon(.symbolImage(R.image.searchRegular_iconSymbols(), colors: [color]))
+        searchButton.setBorder(isSearching ? ASBorderStyle(color: R.Color.Main) : nil)
+
+        if isSearching && displayGames.isEmpty {
+            let label = UILabel()
+            label.font = R.Font.Body()
+            label.textColor = R.Color.LabelSecondary
+            label.textAlignment = .center
+            label.text = R.string.localizable.landscapeSearchNoResults()
+            listView.backgroundView = label
+        } else {
+            listView.backgroundView = nil
+        }
+    }
+
     private func startSearch(text: String) {
         searchString = text.isEmpty ? nil : text
         reloadAll(keepFocus: false)
@@ -1637,6 +1675,17 @@ class GameListLandscapeView: BaseView {
         return cell.focusContentView
     }
 
+    /// Default focus target when the screen first gains controller focus: the game row,
+    /// not the top-leading filter button, so left/right immediately browse games.
+    func preferredFocusView() -> UIView? {
+        if isCarouselEnabled {
+            syncCarouselFocusTargets()
+            guard let card = currentCarouselFocusView, card.fk_canFocus else { return nil }
+            return card
+        }
+        return listView.canEnterFocus ? listView : nil
+    }
+
     /// Current cover is the only focusable target. Left/right change pages via the paging layout.
     /// Do not put press/focus lift on `cardView` — the carousel layout owns that transform.
     private func syncCarouselFocusTargets() {
@@ -1799,7 +1848,7 @@ extension GameListLandscapeView: UICollectionViewDataSource {
         
         let cell = collectionView.dequeueReusableCell(withClass: LandscapeCarouselStyle.current.cellClass, for: indexPath)
         if showsEmptyCard {
-            cell.setEmptyPlaceholder(cardSize: sizedCard(ratio: 0.7))
+            cell.setEmptyPlaceholder(cardSize: sizedCard(ratio: 0.7), isNoSearchResults: isSearching)
         } else {
             cell.setData(game: displayGames[indexPath.row], cardSize: cardSize(for: displayGames[indexPath.row]))
         }
@@ -1844,6 +1893,11 @@ extension GameListLandscapeView: UICollectionViewDelegate {
         guard isCarouselCollectionView(collectionView) else { return }
         if showsEmptyCard {
             UIDevice.generateHaptic()
+            if isSearching {
+                // No matches: reopen the prompt so the keyword can be edited or cleared.
+                showSearchInput()
+                return
+            }
             NotificationCenter.default.post(name: R.NotificationName.HomeSelectionChange, object: HomeTabBar.BarSelection.imports)
             return
         }
