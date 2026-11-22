@@ -1,0 +1,202 @@
+# Unsigned iOS Simulator build of the ManicEmuSimulator scheme (uploaded as the
+# "app" artifact), then a launch smoke test in the simulator (screenshots, app
+# log and any crash report are uploaded as the "simulator" artifact).
+#
+# Runs on every push to a branch that contains this file. For a branch that
+# doesn't (one cut from upstream/main for a PR), run it from this branch and
+# pass the branch to build:
+#   gh workflow run simulator-build.yml -R leewsimpson/ManicEMU -f ref=<branch>
+
+name: Simulator build
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or SHA to build (defaults to the selected branch)
+        required: false
+
+concurrency:
+  group: simulator-build-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # The app uses iOS 27.1 SDK APIs (UIHinge), which need Xcode 27.1+.
+    runs-on: xcode-27
+    timeout-minutes: 120
+    env:
+      SPM_DIR: ${{ github.workspace }}/.build/spm
+      DERIVED_DATA: ${{ github.workspace }}/.build/DerivedData
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          submodules: recursive
+          lfs: false
+
+      # LFS bandwidth is metered, so keep the objects in the Actions cache and
+      # only download what changed. Caches are saved as soon as they're filled
+      # so a failed build still keeps them.
+      - name: List LFS objects
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > "$RUNNER_TEMP/lfs-ids"
+
+      - name: Restore LFS cache
+        id: lfs-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles(format('{0}/lfs-ids', runner.temp)) }}
+          restore-keys: lfs-
+
+      - name: Pull LFS objects
+        run: git lfs pull
+
+      - name: Save LFS cache
+        if: steps.lfs-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .git/lfs
+          key: ${{ steps.lfs-cache.outputs.cache-primary-key }}
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '27.1'
+
+      - name: Restore Swift package cache
+        id: spm-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.SPM_DIR }}
+          key: spm-${{ hashFiles('ManicEmu/ManicEmu.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: spm-
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project ManicEmu/ManicEmu.xcodeproj \
+            -scheme ManicEmuSimulator \
+            -clonedSourcePackagesDirPath "$SPM_DIR" \
+            -skipPackagePluginValidation \
+            -skipMacroValidation
+
+      - name: Save Swift package cache
+        if: steps.spm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.SPM_DIR }}
+          key: ${{ steps.spm-cache.outputs.cache-primary-key }}
+
+      # Incremental builds: restore the newest DerivedData for this branch (or
+      # any branch), then reset file dates so only changed files recompile.
+      - name: Restore DerivedData cache
+        uses: actions/cache/restore@v4
+        with:
+          # Must match the save step's path exactly.
+          path: |
+            ${{ env.DERIVED_DATA }}
+            !${{ env.DERIVED_DATA }}/Logs
+          key: dd-${{ inputs.ref || github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            dd-${{ inputs.ref || github.ref_name }}-
+            dd-
+
+      - name: Prepare incremental build
+        run: |
+          defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
+          bash .github/scripts/set-mtimes.sh "$DERIVED_DATA"
+
+      - name: Build
+        id: build
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project ManicEmu/ManicEmu.xcodeproj \
+            -scheme ManicEmuSimulator \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -clonedSourcePackagesDirPath "$SPM_DIR" \
+            -derivedDataPath "$DERIVED_DATA" \
+            -resultBundlePath "$RUNNER_TEMP/build.xcresult" \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            ARCHS=arm64 \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+          git rev-parse HEAD > "$DERIVED_DATA/.source-sha"
+
+      - name: Save DerivedData cache
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.DERIVED_DATA }}
+            !${{ env.DERIVED_DATA }}/Logs
+          key: dd-${{ inputs.ref || github.ref_name }}-${{ github.sha }}
+
+      # Tarred so file permissions survive the artifact upload.
+      - name: Package app
+        run: |
+          tar -czf "$RUNNER_TEMP/ManicEmuSimulator.app.tar.gz" \
+            -C "$DERIVED_DATA/Build/Products/Debug-iphonesimulator" ManicEmuSimulator.app
+
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: ${{ runner.temp }}/ManicEmuSimulator.app.tar.gz
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload result bundle
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-xcresult
+          path: ${{ runner.temp }}/build.xcresult
+          retention-days: 7
+
+  # Separate job so a failed launch can be re-run ("Re-run failed jobs")
+  # against the uploaded app without rebuilding.
+  smoke-test:
+    needs: build
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - name: Check out scripts
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          sparse-checkout: .github
+          lfs: false
+
+      - name: Download app
+        uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: ${{ runner.temp }}
+
+      - name: Unpack app
+        run: tar -xzf "$RUNNER_TEMP/ManicEmuSimulator.app.tar.gz" -C "$RUNNER_TEMP"
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '27.1'
+
+      - name: Launch in simulator
+        run: |
+          bash .github/scripts/sim-smoke-test.sh \
+            "$RUNNER_TEMP/ManicEmuSimulator.app" "$RUNNER_TEMP/simulator"
+
+      - name: Upload simulator results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator
+          path: ${{ runner.temp }}/simulator
+          if-no-files-found: ignore
+          retention-days: 14
