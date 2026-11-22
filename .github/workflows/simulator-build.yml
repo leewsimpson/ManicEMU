@@ -21,7 +21,8 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-26
+    # The app uses iOS 27.1 SDK APIs (UIHinge), which need Xcode 27.1+.
+    runs-on: xcode-27
     timeout-minutes: 120
     env:
       SPM_DIR: ${{ github.workspace }}/.build/spm
@@ -35,31 +36,57 @@ jobs:
           lfs: false
 
       # LFS bandwidth is metered, so keep the objects in the Actions cache and
-      # only download what changed.
+      # only download what changed. Caches are saved as soon as they're filled
+      # so a failed build still keeps them.
       - name: List LFS objects
-        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-ids
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > "$RUNNER_TEMP/lfs-ids"
 
       - name: Restore LFS cache
-        uses: actions/cache@v4
+        id: lfs-cache
+        uses: actions/cache/restore@v4
         with:
           path: .git/lfs
-          key: lfs-${{ hashFiles('.lfs-ids') }}
+          key: lfs-${{ hashFiles(format('{0}/lfs-ids', runner.temp)) }}
           restore-keys: lfs-
 
       - name: Pull LFS objects
         run: git lfs pull
 
+      - name: Save LFS cache
+        if: steps.lfs-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .git/lfs
+          key: ${{ steps.lfs-cache.outputs.cache-primary-key }}
+
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: '27.1'
 
       - name: Restore Swift package cache
-        uses: actions/cache@v4
+        id: spm-cache
+        uses: actions/cache/restore@v4
         with:
           path: ${{ env.SPM_DIR }}
           key: spm-${{ hashFiles('ManicEmu/ManicEmu.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: spm-
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project ManicEmu/ManicEmu.xcodeproj \
+            -scheme ManicEmuSimulator \
+            -clonedSourcePackagesDirPath "$SPM_DIR" \
+            -skipPackagePluginValidation \
+            -skipMacroValidation
+
+      - name: Save Swift package cache
+        if: steps.spm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.SPM_DIR }}
+          key: ${{ steps.spm-cache.outputs.cache-primary-key }}
 
       - name: Build
         run: |
