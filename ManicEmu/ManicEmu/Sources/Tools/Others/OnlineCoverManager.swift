@@ -73,7 +73,8 @@ class OnlineCoverManager {
             semaphore.wait() // 保证同步等待当前请求完成
         }
         
-        static func searchCovers(coverMatch: CoverMatch, fetchOne: Bool = false, persistentedTranslation: Bool = true, isCallBackMain: Bool = false, completion: (([URL], Bool)->Void)? = nil) {
+        /// - Parameter normaliseNames: Opt-in. Matches on cleaned-up titles (tags stripped, articles/punctuation normalised) in ranked tiers. When false the original matching is used unchanged.
+        static func searchCovers(coverMatch: CoverMatch, fetchOne: Bool = false, persistentedTranslation: Bool = true, isCallBackMain: Bool = false, normaliseNames: Bool = false, completion: (([URL], Bool)->Void)? = nil) {
             //请求封面列表
             let host = URL(string: "https://thumbnails.libretro.com")!
             var boxArtUrl: URL? = nil
@@ -201,7 +202,11 @@ class OnlineCoverManager {
                     var onlineCoverUrls = [URL]()
                     let fuse = Fuse()
                     let pattern = fuse.createPattern(from: gameName)
-                    if fetchOne {
+                    if normaliseNames {
+                        //规范化名称后分层匹配
+                        let result = CoverNameNormalizer.rankedMatches(query: gameName, in: matchList, fetchOne: fetchOne)
+                        onlineCoverUrls.append(contentsOf: result.map { boxArtUrl.appendingPathComponent($0) })
+                    } else if fetchOne {
                         //只获取一个
                         if let result = matchList.min(by: {
                             if let result0 = fuse.search(pattern, in: $0) {
@@ -453,4 +458,218 @@ class OnlineCoverManager {
     }
     
     
+}
+
+// MARK: - Normalised name matching (opt-in via `normaliseNames`)
+extension OnlineCoverManager {
+    /// Cleans up game names and libretro boxart file names so they can be matched on their title,
+    /// then ranks candidates in tiers: exact title + tags, exact title, all query words, fuzzy title.
+    enum CoverNameNormalizer {
+        struct Name {
+            /// Normalised title without tags, e.g. "the legend of zelda a link to the past"
+            let title: String
+            let words: [String]
+            /// Normalised values from (...) tags, e.g. ["usa", "europe"]
+            let tags: Set<String>
+            /// TOSEC-style name with a year tag, e.g. "Commando (1986-11)(Capcom)(US)"
+            let isLegacyStyle: Bool
+            /// Has dump flags such as [b], [h], [a], [t]
+            let isFlagged: Bool
+        }
+
+        private static let tagRegex = try! NSRegularExpression(pattern: #"\(([^)]*)\)|\[([^\]]*)\]"#)
+        /// "Legend of Zelda, The - A Link to the Past" -> "The Legend of Zelda - A Link to the Past"
+        private static let articleRegex = try! NSRegularExpression(pattern: #"^(.+?),\s+(the|a|an|le|la|les|el|los|las|il|der|die|das)(\s*[-:_].*)?$"#,
+                                                                   options: [.caseInsensitive])
+        private static let yearRegex = try! NSRegularExpression(pattern: #"^\s*(19|20)\d\d"#)
+        private static let dumpFlagRegex = try! NSRegularExpression(pattern: #"^\s*(b|h|a|o|t|f|p|tr|cr|u)(\d|\s|$)"#,
+                                                                    options: [.caseInsensitive])
+        /// Fuse (Bitap) returns nil for patterns longer than this
+        private static let maxFuzzyLength = 32
+        private static let fuzzyThreshold = 0.35
+        private static let maxResults = 100
+
+        /// Lower-cases, folds accents, drops apostrophes and turns every other non-alphanumeric
+        /// character (including libretro's "_" substitutes for & : / etc.) into a single space.
+        /// The word "and" is dropped so "&", "and" and "_" all compare equal.
+        static func clean(_ string: String) -> String {
+            let folded = string
+                .folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: nil)
+                .lowercased()
+                .replacingOccurrences(of: "'", with: "")
+                .replacingOccurrences(of: "\u{2019}", with: "")
+            var scalars = String.UnicodeScalarView()
+            for scalar in folded.unicodeScalars {
+                scalars.append(CharacterSet.alphanumerics.contains(scalar) ? scalar : " ")
+            }
+            return String(scalars)
+                .split(separator: " ")
+                .filter { $0 != "and" }
+                .joined(separator: " ")
+        }
+
+        static func parse(_ raw: String, stripExtension: Bool) -> Name {
+            var text = raw
+            if stripExtension, text.lowercased().hasSuffix(".png") {
+                text = String(text.dropLast(4))
+            }
+            let ns = text as NSString
+            var base = ""
+            var tags = Set<String>()
+            var isLegacyStyle = false
+            var isFlagged = false
+            var last = 0
+            for match in tagRegex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+                base += ns.substring(with: NSRange(location: last, length: match.range.location - last)) + " "
+                last = match.range.location + match.range.length
+                if match.range(at: 1).location != NSNotFound {
+                    let content = ns.substring(with: match.range(at: 1))
+                    let contentRange = NSRange(location: 0, length: (content as NSString).length)
+                    if yearRegex.firstMatch(in: content, range: contentRange) != nil {
+                        isLegacyStyle = true
+                    }
+                    for part in content.split(separator: ",") {
+                        let tag = clean(String(part))
+                        if !tag.isEmpty { tags.insert(tag) }
+                    }
+                } else {
+                    let content = ns.substring(with: match.range(at: 2))
+                    if dumpFlagRegex.firstMatch(in: content, range: NSRange(location: 0, length: (content as NSString).length)) != nil {
+                        isFlagged = true
+                    }
+                }
+            }
+            base += ns.substring(from: last)
+            base = base.trimmingCharacters(in: .whitespaces)
+            let baseRange = NSRange(location: 0, length: (base as NSString).length)
+            base = articleRegex.stringByReplacingMatches(in: base, range: baseRange, withTemplate: "$2 $1$3")
+            let title = clean(base)
+            return Name(title: title,
+                        words: title.split(separator: " ").map(String.init),
+                        tags: tags,
+                        isLegacyStyle: isLegacyStyle,
+                        isFlagged: isFlagged)
+        }
+
+        /// Shortens a title to whole words that fit Fuse's pattern limit, so long titles still fuzzy-match.
+        static func fuzzyPattern(for title: String) -> String {
+            guard title.count > maxFuzzyLength else { return title }
+            var result = ""
+            for word in title.split(separator: " ") {
+                let next = result.isEmpty ? String(word) : result + " " + word
+                if next.count > maxFuzzyLength { break }
+                result = next
+            }
+            return result.isEmpty ? String(title.prefix(maxFuzzyLength)) : result
+        }
+
+        private struct Ranked {
+            /// Position in the candidate list
+            let index: Int
+            let file: String
+            /// 0 exact title + tags, 1 exact title, 2 contains all query words, 3 fuzzy title
+            let tier: Int
+            let score: Double
+            let extraWords: Int
+            let regionMiss: Int
+            /// Tags beyond the query's, e.g. (Beta), (Virtual Console)
+            let extraTags: Int
+            let legacy: Int
+            let flagged: Int
+
+            func isOrderedBefore(_ other: Ranked) -> Bool {
+                if tier != other.tier { return tier < other.tier }
+                if score != other.score { return score < other.score }
+                if extraWords != other.extraWords { return extraWords < other.extraWords }
+                if regionMiss != other.regionMiss { return regionMiss < other.regionMiss }
+                if extraTags != other.extraTags { return extraTags < other.extraTags }
+                if legacy != other.legacy { return legacy < other.legacy }
+                if flagged != other.flagged { return flagged < other.flagged }
+                return file < other.file
+            }
+        }
+
+        /// The user's "Normalise Names" choice, shared by the libretro, SteamGridDB and bulk scraping searches.
+        static var isEnabled: Bool {
+            get { UserDefaults.standard.bool(forKey: R.DefaultKey.CoverSearchNormaliseNames) }
+            set { UserDefaults.standard.set(newValue, forKey: R.DefaultKey.CoverSearchNormaliseNames) }
+        }
+
+        /// A readable search string for title-based services such as SteamGridDB: tags removed and
+        /// articles moved back, wording and case kept.
+        /// "Legend of Zelda, The - A Link to the Past (USA) [!]" -> "The Legend of Zelda - A Link to the Past"
+        static func searchTitle(for raw: String) -> String {
+            var base = tagRegex.stringByReplacingMatches(in: raw,
+                                                         range: NSRange(location: 0, length: (raw as NSString).length),
+                                                         withTemplate: " ")
+            base = base.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            base = articleRegex.stringByReplacingMatches(in: base,
+                                                         range: NSRange(location: 0, length: (base as NSString).length),
+                                                         withTemplate: "$2 $1$3")
+            return base.isEmpty ? raw.trimmingCharacters(in: .whitespaces) : base
+        }
+
+        /// Returns candidate file names (unchanged, for building URLs) best match first.
+        /// With `fetchOne` only a confident match (tiers 0, 1 or 3) is returned.
+        static func rankedMatches(query: String, in candidates: [String], fetchOne: Bool) -> [String] {
+            let ranked = rank(query: query, names: candidates, stripExtension: true)
+            if fetchOne {
+                return ranked.first(where: { $0.tier != 2 }).map { [$0.file] } ?? []
+            }
+            Log.debug("规范化搜索:\(query) -> 结果数:\(ranked.count)")
+            return ranked.prefix(maxResults).map(\.file)
+        }
+
+        /// Ranks items by their title, e.g. SteamGridDB games. Matching items come first, best first;
+        /// items that do not match at all keep their original order after them.
+        static func rankedItems<T>(query: String, in items: [T], name: (T) -> String) -> [T] {
+            let ranked = rank(query: query, names: items.map(name), stripExtension: false)
+            let matched = Set(ranked.map(\.index))
+            return ranked.map { items[$0.index] } + items.indices.filter { !matched.contains($0) }.map { items[$0] }
+        }
+
+        /// The most likely item for `query`, preferring confident matches (tiers 0, 1 or 3) over
+        /// items that merely contain all query words. Nil when nothing matches.
+        static func bestItem<T>(query: String, in items: [T], name: (T) -> String) -> T? {
+            let ranked = rank(query: query, names: items.map(name), stripExtension: false)
+            return (ranked.first(where: { $0.tier != 2 }) ?? ranked.first).map { items[$0.index] }
+        }
+
+        private static func rank(query: String, names candidates: [String], stripExtension: Bool) -> [Ranked] {
+            let q = parse(query, stripExtension: false)
+            guard !q.words.isEmpty else { return [] }
+            let queryWords = Set(q.words)
+            let fuse = Fuse()
+            let pattern = fuse.createPattern(from: fuzzyPattern(for: q.title))
+
+            var ranked = [Ranked]()
+            for (index, file) in candidates.enumerated() {
+                let c = parse(file, stripExtension: stripExtension)
+                guard !c.words.isEmpty else { continue }
+                let tier: Int
+                var score = 0.0
+                if c.title == q.title {
+                    tier = (!q.tags.isEmpty && c.tags == q.tags) ? 0 : 1
+                } else if queryWords.isSubset(of: c.words) {
+                    tier = 2
+                } else if let fuzzyScore = fuse.search(pattern, in: c.title)?.score, fuzzyScore < fuzzyThreshold {
+                    tier = 3
+                    score = fuzzyScore
+                } else {
+                    continue
+                }
+                ranked.append(Ranked(index: index,
+                                     file: file,
+                                     tier: tier,
+                                     score: score,
+                                     extraWords: max(0, c.words.count - q.words.count),
+                                     regionMiss: (q.tags.isEmpty || !c.tags.isDisjoint(with: q.tags)) ? 0 : 1,
+                                     extraTags: max(0, c.tags.count - q.tags.count),
+                                     legacy: c.isLegacyStyle ? 1 : 0,
+                                     flagged: c.isFlagged ? 1 : 0))
+            }
+            ranked.sort { $0.isOrderedBefore($1) }
+            return ranked
+        }
+    }
 }
