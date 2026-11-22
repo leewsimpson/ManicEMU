@@ -36,6 +36,8 @@ class FilesImporter: NSObject {
         documentPickerViewController.delegate = self
         documentPickerViewController.overrideUserInterfaceStyle = UIDevice.isDarkMode ? .dark : .light
         documentPickerViewController.allowsMultipleSelection = allowsMultipleSelection
+        //Open in the app's Documents folder instead of Recents, which can stall while file providers are queried.
+        documentPickerViewController.directoryURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
         if #available(iOS 27.1, *), DuoTabletopKit.isTabletopMode {
             documentPickerViewController.modalPresentationStyle = .overFullScreen
         } else {
