@@ -101,6 +101,7 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/build.xcresult" \
             -skipPackagePluginValidation \
             -skipMacroValidation \
+            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
 
