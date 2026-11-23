@@ -466,7 +466,7 @@ extension WebServer {
           <p>The agent finds this phone on its own. If it can't, give it this address:
             <code class="server-url"></code></p>
           <p>Uploading a whole folder or an arcade set, or prefer the command line? See the
-            <a href="https://github.com/Manic-EMU/ManicEMU/blob/main/docs/wifi-library.md" target="_blank">Wi-Fi library guide</a>.</p>
+            <a href="https://github.com/leewsimpson/ManicEMU/blob/main/docs/wifi-library.md" target="_blank">Wi-Fi library guide</a>.</p>
         </div>
         <script type="text/javascript">
           (function () {
